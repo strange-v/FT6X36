@@ -55,12 +55,36 @@
 
 #define FT6X36_DEFAULT_THRESHOLD		22
 
+enum TRawEvent
+{
+	FT_PressDown,
+	FT_LiftUp,
+	FT_Contact,
+	FT_NoEvent
+};
+
+enum TEvent
+{
+	TS_None,
+	TS_Touch_Start,
+	TS_Touch_Move,
+	TS_Touch_End,
+	TS_Tap,
+	TS_Drag_Start,
+	TS_Drag_Move,
+	TS_Drag_End
+};
+
 struct TPoint
 {
 	uint8_t x;
 	uint8_t y;
-	uint8_t event;
-	uint8_t tmp;
+
+	bool aboutEqual(const TPoint point)
+	{
+		const uint8_t maxDeviation = 5;
+		return abs(x - point.x) <= maxDeviation && abs(y - point.y) <= maxDeviation;
+	}
 };
 
 class FT6X36
@@ -70,21 +94,31 @@ public:
 	FT6X36(TwoWire * wire, int8_t intPin);
 	~FT6X36();
 	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD);
-	void registerTouchHandler(void(*fn)());
+	void registerIsrHandler(void(*fn)());
+	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
 	uint8_t touched(void);
-	TPoint getPoint(uint8_t n = 0);
-	uint8_t getState();
+	void processTouch();
+#ifdef FT6X36_DEBUG
+	void debugInfo();
+#endif
 private:
 	void onInterrupt();
 	void readData(void);
 	void writeRegister8(uint8_t reg, uint8_t val);
 	uint8_t readRegister8(uint8_t reg);
+	void fireEvent(TPoint point, TEvent e);
 
 	static FT6X36 * _instance;
 	TwoWire * _wire = nullptr;
 	uint8_t _intPin;
-	void(*_handler)();
+	void(*_isrHandler)() = nullptr;
+	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
 	uint8_t _touches;
 	uint16_t _touchX[2], _touchY[2], _touchEvent[2];
+	TPoint _points[10];
+	uint8_t _pointIdx = 0;
+	unsigned long _touchStartTime = 0;
+	unsigned long _touchEndTime = 0;
+	bool _dragMode = false;
 };
 

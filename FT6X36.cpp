@@ -35,18 +35,23 @@ bool FT6X36::begin(uint8_t threshold)
 	writeRegister8(FT6X36_REG_THRESHHOLD, threshold);
 	writeRegister8(FT6X36_REG_TOUCHRATE_ACTIVE, 0x0E);
 	
-	writeRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT, (uint8_t)10);
-	writeRegister8(FT6X36_REG_OFFSET_UP_DOWN, (uint8_t)10);
-	writeRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT, (uint8_t)50);
-	writeRegister8(FT6X36_REG_DISTANCE_UP_DOWN, (uint8_t)50);
-	writeRegister8(FT6X36_REG_DISTANCE_ZOOM, (uint8_t)50);
+	//writeRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT, (uint8_t)10);
+	//writeRegister8(FT6X36_REG_OFFSET_UP_DOWN, (uint8_t)10);
+	//writeRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT, (uint8_t)50);
+	//writeRegister8(FT6X36_REG_DISTANCE_UP_DOWN, (uint8_t)50);
+	//writeRegister8(FT6X36_REG_DISTANCE_ZOOM, (uint8_t)50);
 
 	return true;
 }
 
-void FT6X36::registerTouchHandler(void(*fn)())
+void FT6X36::registerIsrHandler(void(*fn)())
 {
-	_handler = fn;
+	_isrHandler = fn;
+}
+
+void FT6X36::registerTouchHandler(void(*fn)(TPoint point, TEvent e))
+{
+	_touchHandler = fn;
 }
 
 uint8_t FT6X36::touched(void)
@@ -59,64 +64,65 @@ uint8_t FT6X36::touched(void)
 	return n;
 }
 
-TPoint FT6X36::getPoint(uint8_t n)
+void FT6X36::processTouch()
 {
 	readData();
+	uint8_t n = 0;
+	TRawEvent event = (TRawEvent)_touchEvent[n];
+	TPoint point { _touchX[n], _touchY[n] };
 
-	TPoint p {0, 0, 0};
+	if (event == FT_PressDown)
+	{
+		_points[0] = point;
+		_pointIdx = 1;
+		_dragMode = false;
+		_touchStartTime = millis();
+		fireEvent(point, TS_Touch_Start);
+	}
+	else if (event == FT_Contact)
+	{
+		if (_pointIdx < 10)
+		{
+			_points[_pointIdx] = point;
+			_pointIdx += 1;
+		}
+		if (!_dragMode && _points[0].aboutEqual(point) && millis() - _touchStartTime > 300)
+		{
+			_dragMode = true;
+			fireEvent(point, TS_Drag_Start);
+		}
+		else if (_dragMode)
+			fireEvent(point, TS_Drag_Move);
 
-	p.x = _touchX[n];
-	p.y = _touchY[n];
-	p.event = _touchEvent[n];
-
-	return p;
-}
-
-uint8_t FT6X36::getState()
-{
-	Serial.print("TH_DIFF: ");
-	Serial.println(readRegister8(FT6X36_REG_FILTER_COEF));
-	Serial.print("CTRL: ");
-	Serial.println(readRegister8(FT6X36_REG_CTRL));
-	Serial.print("TIMEENTERMONITOR: ");
-	Serial.println(readRegister8(FT6X36_REG_TIME_ENTER_MONITOR));
-	Serial.print("PERIODACTIVE: ");
-	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_ACTIVE));
-	Serial.print("PERIODMONITOR: ");
-	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_MONITOR));
-	Serial.print("RADIAN_VALUE: ");
-	Serial.println(readRegister8(FT6X36_REG_RADIAN_VALUE));
-	Serial.print("OFFSET_LEFT_RIGHT: ");
-	Serial.println(readRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT));
-	Serial.print("OFFSET_UP_DOWN: ");
-	Serial.println(readRegister8(FT6X36_REG_OFFSET_UP_DOWN));
-	Serial.print("DISTANCE_LEFT_RIGHT: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT));
-	Serial.print("DISTANCE_UP_DOWN: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_UP_DOWN));
-	Serial.print("DISTANCE_ZOOM: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_ZOOM));
-	Serial.print("CIPHER: ");
-	Serial.println(readRegister8(FT6X36_REG_CHIPID));
-	Serial.print("G_MODE: ");
-	Serial.println(readRegister8(FT6X36_REG_INTERRUPT_MODE));
-	Serial.print("PWR_MODE: ");
-	Serial.println(readRegister8(FT6X36_REG_POWER_MODE));
-	Serial.print("FIRMID: ");
-	Serial.println(readRegister8(FT6X36_REG_FIRMWARE_VERSION));
-	Serial.print("FOCALTECH_ID: ");
-	Serial.println(readRegister8(FT6X36_REG_PANEL_ID));
-	Serial.print("STATE: ");
-	Serial.println(readRegister8(FT6X36_REG_STATE));
-
-	return 0;
+		fireEvent(point, TS_Touch_Move);
+	}
+	else if (event == FT_LiftUp)
+	{
+		_points[9] = point;
+		_touchEndTime = millis();
+		fireEvent(point, TS_Touch_End);
+		if (_dragMode)
+		{
+			fireEvent(point, TS_Drag_End);
+			_dragMode = false;
+		}
+		if (_points[0].aboutEqual(point) && _touchEndTime - _touchStartTime <= 300)
+		{
+			fireEvent(point, TS_Tap);
+			_points[0] = { 0, 0 };
+			_touchStartTime = 0;
+		}
+	}
+	else
+	{
+	}
 }
 
 void FT6X36::onInterrupt()
 {
-	if (_handler)
+	if (_isrHandler)
 	{
-		_handler();
+		_isrHandler();
 	}
 }
 
@@ -148,8 +154,6 @@ void FT6X36::readData(void)
 	Serial.println(data[FT6X36_REG_GESTURE_ID]);
 #endif
 	_touches = data[FT6X36_REG_NUM_TOUCHES];
-	//if (_touches > 2)
-	//	_touches = 0;
 
 	const uint8_t addrShift = 6;
 	for (uint8_t i = 0; i < 2; i++)
@@ -190,3 +194,51 @@ uint8_t FT6X36::readRegister8(uint8_t reg)
 
 	return value;
 }
+
+void FT6X36::fireEvent(TPoint point, TEvent e)
+{
+	if (_touchHandler)
+		_touchHandler(point, e);
+}
+
+#ifdef FT6X36_DEBUG
+uint8_t FT6X36::debugInfo()
+{
+	Serial.print("TH_DIFF: ");
+	Serial.println(readRegister8(FT6X36_REG_FILTER_COEF));
+	Serial.print("CTRL: ");
+	Serial.println(readRegister8(FT6X36_REG_CTRL));
+	Serial.print("TIMEENTERMONITOR: ");
+	Serial.println(readRegister8(FT6X36_REG_TIME_ENTER_MONITOR));
+	Serial.print("PERIODACTIVE: ");
+	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_ACTIVE));
+	Serial.print("PERIODMONITOR: ");
+	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_MONITOR));
+	Serial.print("RADIAN_VALUE: ");
+	Serial.println(readRegister8(FT6X36_REG_RADIAN_VALUE));
+	Serial.print("OFFSET_LEFT_RIGHT: ");
+	Serial.println(readRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT));
+	Serial.print("OFFSET_UP_DOWN: ");
+	Serial.println(readRegister8(FT6X36_REG_OFFSET_UP_DOWN));
+	Serial.print("DISTANCE_LEFT_RIGHT: ");
+	Serial.println(readRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT));
+	Serial.print("DISTANCE_UP_DOWN: ");
+	Serial.println(readRegister8(FT6X36_REG_DISTANCE_UP_DOWN));
+	Serial.print("DISTANCE_ZOOM: ");
+	Serial.println(readRegister8(FT6X36_REG_DISTANCE_ZOOM));
+	Serial.print("CIPHER: ");
+	Serial.println(readRegister8(FT6X36_REG_CHIPID));
+	Serial.print("G_MODE: ");
+	Serial.println(readRegister8(FT6X36_REG_INTERRUPT_MODE));
+	Serial.print("PWR_MODE: ");
+	Serial.println(readRegister8(FT6X36_REG_POWER_MODE));
+	Serial.print("FIRMID: ");
+	Serial.println(readRegister8(FT6X36_REG_FIRMWARE_VERSION));
+	Serial.print("FOCALTECH_ID: ");
+	Serial.println(readRegister8(FT6X36_REG_PANEL_ID));
+	Serial.print("STATE: ");
+	Serial.println(readRegister8(FT6X36_REG_STATE));
+
+	return 0;
+}
+#endif
