@@ -1,8 +1,8 @@
 #include "FT6X36.h"
 
-FT6X36 * FT6X36::_instance = nullptr;
+FT6X36 *FT6X36::_instance = nullptr;
 
-FT6X36::FT6X36(TwoWire * wire, int8_t intPin)
+FT6X36::FT6X36(TwoWire *wire, int8_t intPin)
 {
 	_instance = this;
 	_wire = wire;
@@ -14,7 +14,7 @@ FT6X36::~FT6X36()
 	detachInterrupt(digitalPinToInterrupt(_intPin));
 }
 
-void FT6X36::isr()
+void ISR_ATTR FT6X36::isr()
 {
 	if (_instance)
 		_instance->onInterrupt();
@@ -34,27 +34,21 @@ bool FT6X36::begin(uint8_t threshold)
 	writeRegister8(FT6X36_REG_DEVICE_MODE, 0x00);
 	writeRegister8(FT6X36_REG_THRESHHOLD, threshold);
 	writeRegister8(FT6X36_REG_TOUCHRATE_ACTIVE, 0x0E);
-	
-	//writeRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT, (uint8_t)10);
-	//writeRegister8(FT6X36_REG_OFFSET_UP_DOWN, (uint8_t)10);
-	//writeRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT, (uint8_t)50);
-	//writeRegister8(FT6X36_REG_DISTANCE_UP_DOWN, (uint8_t)50);
-	//writeRegister8(FT6X36_REG_DISTANCE_ZOOM, (uint8_t)50);
 
 	return true;
 }
 
-void FT6X36::registerIsrHandler(void(*fn)())
+void FT6X36::registerIsrHandler(void (*fn)())
 {
 	_isrHandler = fn;
 }
 
-void FT6X36::registerTouchHandler(void(*fn)(TPoint point, TEvent e))
+void FT6X36::registerTouchHandler(void (*fn)(TPoint point, TEvent e))
 {
 	_touchHandler = fn;
 }
 
-uint8_t FT6X36::touched(void)
+uint8_t FT6X36::touched()
 {
 	uint8_t n = readRegister8(FT6X36_REG_NUM_TOUCHES);
 	if (n > 2)
@@ -64,22 +58,31 @@ uint8_t FT6X36::touched(void)
 	return n;
 }
 
+void FT6X36::loop()
+{
+	while (_isrCounter > 0)
+	{
+		_isrCounter--;
+		processTouch();
+	}
+}
+
 void FT6X36::processTouch()
 {
 	readData();
 	uint8_t n = 0;
 	TRawEvent event = (TRawEvent)_touchEvent[n];
-	TPoint point { _touchX[n], _touchY[n] };
+	TPoint point{_touchX[n], _touchY[n]};
 
-	if (event == FT_PressDown)
+	if (event == TRawEvent::PressDown)
 	{
 		_points[0] = point;
 		_pointIdx = 1;
 		_dragMode = false;
 		_touchStartTime = millis();
-		fireEvent(point, TS_Touch_Start);
+		fireEvent(point, TEvent::TouchStart);
 	}
-	else if (event == FT_Contact)
+	else if (event == TRawEvent::Contact)
 	{
 		if (_pointIdx < 10)
 		{
@@ -89,27 +92,27 @@ void FT6X36::processTouch()
 		if (!_dragMode && _points[0].aboutEqual(point) && millis() - _touchStartTime > 300)
 		{
 			_dragMode = true;
-			fireEvent(point, TS_Drag_Start);
+			fireEvent(point, TEvent::DragStart);
 		}
 		else if (_dragMode)
-			fireEvent(point, TS_Drag_Move);
+			fireEvent(point, TEvent::DragMove);
 
-		fireEvent(point, TS_Touch_Move);
+		fireEvent(point, TEvent::TouchMove);
 	}
-	else if (event == FT_LiftUp)
+	else if (event == TRawEvent::LiftUp)
 	{
 		_points[9] = point;
 		_touchEndTime = millis();
-		fireEvent(point, TS_Touch_End);
+		fireEvent(point, TEvent::TouchEnd);
 		if (_dragMode)
 		{
-			fireEvent(point, TS_Drag_End);
+			fireEvent(point, TEvent::DragEnd);
 			_dragMode = false;
 		}
 		if (_points[0].aboutEqual(point) && _touchEndTime - _touchStartTime <= 300)
 		{
-			fireEvent(point, TS_Tap);
-			_points[0] = { 0, 0 };
+			fireEvent(point, TEvent::Tap);
+			_points[0] = {0, 0};
 			_touchStartTime = 0;
 		}
 	}
@@ -120,6 +123,8 @@ void FT6X36::processTouch()
 
 void FT6X36::onInterrupt()
 {
+	_isrCounter++;
+
 	if (_isrHandler)
 	{
 		_isrHandler();
@@ -140,7 +145,8 @@ void FT6X36::readData(void)
 
 #ifdef FT6X36_DEBUG
 	Serial.println("REGISTERS:");
-	for (int16_t i = 0; i < size; i++) {
+	for (int16_t i = 0; i < size; i++)
+	{
 		Serial.print("0x");
 		Serial.print(i, HEX);
 		Serial.print(" = 0x");

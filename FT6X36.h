@@ -2,6 +2,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#ifdef ESP32
+#define ISR_ATTR IRAM_ATTR
+#else
+#define ISR_ATTR
+#endif
+
 //#define I2C_DEBUG 1
 //#define FT6X36_DEBUG 1
 
@@ -55,30 +61,30 @@
 
 #define FT6X36_DEFAULT_THRESHOLD		22
 
-enum TRawEvent
+enum class TRawEvent
 {
-	FT_PressDown,
-	FT_LiftUp,
-	FT_Contact,
-	FT_NoEvent
+	PressDown,
+	LiftUp,
+	Contact,
+	NoEvent
 };
 
-enum TEvent
+enum class TEvent
 {
-	TS_None,
-	TS_Touch_Start,
-	TS_Touch_Move,
-	TS_Touch_End,
-	TS_Tap,
-	TS_Drag_Start,
-	TS_Drag_Move,
-	TS_Drag_End
+	None,
+	TouchStart,
+	TouchMove,
+	TouchEnd,
+	Tap,
+	DragStart,
+	DragMove,
+	DragEnd
 };
 
 struct TPoint
 {
-	uint8_t x;
-	uint8_t y;
+	uint16_t x;
+	uint16_t y;
 
 	bool aboutEqual(const TPoint point)
 	{
@@ -96,7 +102,8 @@ public:
 	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD);
 	void registerIsrHandler(void(*fn)());
 	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
-	uint8_t touched(void);
+	uint8_t touched();
+	void loop();
 	void processTouch();
 #ifdef FT6X36_DEBUG
 	void debugInfo();
@@ -111,8 +118,11 @@ private:
 	static FT6X36 * _instance;
 	TwoWire * _wire = nullptr;
 	uint8_t _intPin;
+
 	void(*_isrHandler)() = nullptr;
 	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
+	volatile uint8_t _isrCounter = 0;
+	
 	uint8_t _touches;
 	uint16_t _touchX[2], _touchY[2], _touchEvent[2];
 	TPoint _points[10];
