@@ -29,6 +29,7 @@ bool FT6X36::begin(uint8_t threshold)
 	if (id != FT6206_CHIPID && id != FT6236_CHIPID && id != FT6336_CHIPID)
 		return false;
 
+	pinMode(_intPin, INPUT_PULLUP);
 	attachInterrupt(digitalPinToInterrupt(_intPin), FT6X36::isr, FALLING);
 
 	writeRegister8(FT6X36_REG_DEVICE_MODE, 0x00);
@@ -208,7 +209,7 @@ void FT6X36::fireEvent(TPoint point, TEvent e)
 }
 
 #ifdef FT6X36_DEBUG
-uint8_t FT6X36::debugInfo()
+void FT6X36::debugInfo()
 {
 	Serial.print("TH_DIFF: ");
 	Serial.println(readRegister8(FT6X36_REG_FILTER_COEF));
@@ -244,7 +245,5 @@ uint8_t FT6X36::debugInfo()
 	Serial.println(readRegister8(FT6X36_REG_PANEL_ID));
 	Serial.print("STATE: ");
 	Serial.println(readRegister8(FT6X36_REG_STATE));
-
-	return 0;
 }
 #endif
