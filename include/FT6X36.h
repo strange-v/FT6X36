@@ -1,15 +1,28 @@
-#pragma once
-#include <Arduino.h>
-#include <Wire.h>
+#include <stdint.h>
+#include <cstdlib>
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include <stdio.h>
+#include "esp_log.h"
+#include "driver/i2c.h"
+#include "sdkconfig.h"
 
-#ifdef ESP32
-#define ISR_ATTR IRAM_ATTR
-#else
-#define ISR_ATTR
-#endif
+#ifndef ft6x36_h
+#define ft6x36_h
 
-//#define I2C_DEBUG 1
-//#define FT6X36_DEBUG 1
+static const char *TAG = "i2c-touch";
+//#define I2C_DEBUG 1 - renamed to TOUCH_I2C_DEBUG
+
+// I2C Constants
+#define I2C_MASTER_TX_BUF_DISABLE 0                           /*!< I2C master doesn't need buffer */
+#define I2C_MASTER_RX_BUF_DISABLE 0                           /*!< I2C master doesn't need buffer */
+
+#define ACK_CHECK_EN 0x1                        /*!< I2C master will check ack from slave*/
+#define ACK_CHECK_DIS 0x0                       /*!< I2C master will not check ack from slave */
+#define ACK_VAL 0x0                             /*!< I2C ack value */
+#define NACK_VAL 0x1                            /*!< I2C nack value */
+
+//SemaphoreHandle_t print_mux = NULL;
 
 #define FT6X36_ADDR						0x38
 
@@ -54,12 +67,25 @@
 #define FT6X36_PMODE_STANDBY			0x02
 #define FT6X36_PMODE_HIBERNATE			0x03
 
+/* Possible values returned by FT6X36_GEST_ID_REG */
+#define FT6X36_GEST_ID_NO_GESTURE       0x00
+#define FT6X36_GEST_ID_MOVE_UP          0x10
+#define FT6X36_GEST_ID_MOVE_RIGHT       0x14
+#define FT6X36_GEST_ID_MOVE_DOWN        0x18
+#define FT6X36_GEST_ID_MOVE_LEFT        0x1C
+#define FT6X36_GEST_ID_ZOOM_IN          0x48
+#define FT6X36_GEST_ID_ZOOM_OUT         0x49
+
 #define FT6X36_VENDID					0x11
 #define FT6206_CHIPID					0x06
 #define FT6236_CHIPID					0x36
 #define FT6336_CHIPID					0x64
 
 #define FT6X36_DEFAULT_THRESHOLD		22
+
+// From: https://github.com/lvgl/lv_port_esp32/blob/master/components/lvgl_esp32_drivers/lvgl_touch/ft6x36.h
+#define FT6X36_MSB_MASK                 0x0F
+#define FT6X36_LSB_MASK                 0xFF
 
 enum class TRawEvent
 {
@@ -95,9 +121,10 @@ struct TPoint
 
 class FT6X36
 {
-	static void isr();
+	static void IRAM_ATTR isr(void* arg);
 public:
-	FT6X36(TwoWire * wire, int8_t intPin);
+    // TwoWire * wire will be replaced by ESP-IDF https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/i2c.html
+	FT6X36(int8_t intPin);
 	~FT6X36();
 	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD);
 	void registerIsrHandler(void(*fn)());
@@ -105,18 +132,18 @@ public:
 	uint8_t touched();
 	void loop();
 	void processTouch();
-#ifdef FT6X36_DEBUG
 	void debugInfo();
-#endif
+
 private:
 	void onInterrupt();
-	void readData(void);
+	bool readData(void);
 	void writeRegister8(uint8_t reg, uint8_t val);
-	uint8_t readRegister8(uint8_t reg);
+	uint8_t readRegister8(uint8_t reg, uint8_t *data_buf);
 	void fireEvent(TPoint point, TEvent e);
-
+	uint8_t read8(uint8_t regName);
+	
 	static FT6X36 * _instance;
-	TwoWire * _wire = nullptr;
+	
 	uint8_t _intPin;
 
 	void(*_isrHandler)() = nullptr;
@@ -132,3 +159,4 @@ private:
 	bool _dragMode = false;
 };
 
+#endif
