@@ -1,6 +1,7 @@
 #include "FT6X36.h"
 
 FT6X36 *FT6X36::_instance = nullptr;
+static const char *TAG = "i2c-touch";
 
 FT6X36::FT6X36(int8_t intPin)
 {
@@ -8,9 +9,9 @@ FT6X36::FT6X36(int8_t intPin)
 
 	i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = CONFIG_TOUCH_SDA;
+    conf.sda_io_num = (gpio_num_t)CONFIG_TOUCH_SDA;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = CONFIG_TOUCH_SDL;
+    conf.scl_io_num = (gpio_num_t)CONFIG_TOUCH_SDL;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = CONFIG_I2C_MASTER_FREQUENCY;
     i2c_param_config(I2C_NUM_0, &conf);
@@ -31,9 +32,7 @@ FT6X36::~FT6X36()
 
 void IRAM_ATTR FT6X36::isr(void* arg)
 {
-	//ets_printf("ISR ");
-	if (_instance)
-		_instance->onInterrupt();
+   _instance->onInterrupt();
 }
 
 bool FT6X36::begin(uint8_t threshold)
@@ -55,22 +54,18 @@ bool FT6X36::begin(uint8_t threshold)
 	}
 	ESP_LOGI(TAG, "\tFound touch controller with Chip ID: 0x%02x", chip_id);
 	
-    // Sensor that goes HIGH when detects something (Ex. triggering a new image request in an exposition)
+    // INT pin triggers the callback function on the Falling edge of the GPIO
     gpio_config_t io_conf;
-    //interrupt of rising edge
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     io_conf.pin_bit_mask = 1ULL<<CONFIG_TOUCH_INT;  
     io_conf.mode = GPIO_MODE_INPUT;
-    //enable pull-up mode
-    io_conf.pull_up_en = (gpio_pullup_t)1;
+    io_conf.pull_up_en = (gpio_pullup_t)1; //  pull-up mode
     gpio_config(&io_conf);
 
 	esp_err_t isr_service = gpio_install_isr_service(0);
-    printf("ISR trigger install response: 0x%x\n", isr_service);
-	// Correct this: 
+    printf("ISR trigger install response: 0x%x %s\n", isr_service, (isr_service==0)?"ESP_OK":"");
     gpio_isr_handler_add((gpio_num_t)CONFIG_TOUCH_INT, isr, (void*) 1);
 
-	//attachInterrupt(digitalPinToInterrupt(_intPin), FT6X36::isr, FALLING);
 	writeRegister8(FT6X36_REG_DEVICE_MODE, 0x00);
 	writeRegister8(FT6X36_REG_THRESHHOLD, threshold);
 	writeRegister8(FT6X36_REG_TOUCHRATE_ACTIVE, 0x0E);
@@ -85,6 +80,7 @@ void FT6X36::registerIsrHandler(void (*fn)())
 void FT6X36::registerTouchHandler(void (*fn)(TPoint point, TEvent e))
 {
 	_touchHandler = fn;
+	if (CONFIG_FT6X36_DEBUG) printf("Touch handler function registered\n");
 }
 
 uint8_t FT6X36::touched()
@@ -105,9 +101,7 @@ uint8_t FT6X36::touched()
 
 void FT6X36::loop()
 {
-	while (_isrCounter > 0)
-	{
-		_isrCounter--;
+	if (_isrInterrupt)	{
 		processTouch();
 	}
 }
@@ -124,7 +118,7 @@ void FT6X36::processTouch()
 		_points[0] = point;
 		_pointIdx = 1;
 		_dragMode = false;
-		_touchStartTime = esp_timer_get_time();
+		_touchStartTime = esp_timer_get_time()/1000;
 		fireEvent(point, TEvent::TouchStart);
 	}
 	else if (event == TRawEvent::Contact)
@@ -134,7 +128,7 @@ void FT6X36::processTouch()
 			_points[_pointIdx] = point;
 			_pointIdx += 1;
 		}
-		if (!_dragMode && _points[0].aboutEqual(point) && esp_timer_get_time() - _touchStartTime > 300)
+		if (!_dragMode && _points[0].aboutEqual(point) && (esp_timer_get_time()/1000) - _touchStartTime > 300)
 		{
 			_dragMode = true;
 			fireEvent(point, TEvent::DragStart);
@@ -147,7 +141,7 @@ void FT6X36::processTouch()
 	else if (event == TRawEvent::LiftUp)
 	{
 		_points[9] = point;
-		_touchEndTime = esp_timer_get_time();
+		_touchEndTime = esp_timer_get_time()/1000;
 		fireEvent(point, TEvent::TouchEnd);
 		if (_dragMode)
 		{
@@ -161,15 +155,12 @@ void FT6X36::processTouch()
 			_touchStartTime = 0;
 		}
 	}
-	else
-	{
-	}
 }
 
 void FT6X36::onInterrupt()
 {
-	_isrCounter++;
-    //ets_printf("c:%d\n",_isrCounter);
+	_isrInterrupt = true;
+	
 	if (_isrHandler)
 	{
 		_isrHandler();
@@ -186,13 +177,11 @@ bool FT6X36::readData(void)
 {
 	uint8_t data_xy[4];         // 2 bytes X | 2 bytes Y
     uint8_t touch_pnt_cnt;      // Number of detected touch points
-    int16_t last_x = 0;  // 12bit pixel value
-    int16_t last_y = 0;  // 12bit pixel value
 
     readRegister8(FT6X36_REG_NUM_TOUCHES, &touch_pnt_cnt);
 	if (touch_pnt_cnt==0) return 0;
 
-	printf("TOUCHES:%d\n",touch_pnt_cnt);
+	ets_printf("TOUCHES:%d\n",touch_pnt_cnt);
 
 
     // Read X value
@@ -236,10 +225,13 @@ bool FT6X36::readData(void)
         return false;
     }
 
-    last_x = ((data_xy[0] & FT6X36_MSB_MASK) << 8) | (data_xy[1] & FT6X36_LSB_MASK);
-    last_y = ((data_xy[2] & FT6X36_MSB_MASK) << 8) | (data_xy[3] & FT6X36_LSB_MASK);
+    _touchX[0] = ((data_xy[0] & FT6X36_MSB_MASK) << 8) | (data_xy[1] & FT6X36_LSB_MASK);
+    _touchY[0] = ((data_xy[2] & FT6X36_MSB_MASK) << 8) | (data_xy[3] & FT6X36_LSB_MASK);
+	_touchEvent[0] = data_xy[0] >> 7;
 	
-	printf("X: %d Y: %d\n", last_x, last_y);
+	if (CONFIG_FT6X36_DEBUG)
+	ets_printf("X: %d Y: %d T: %d\n", _touchX[0], _touchY[0], _touchEvent[0]);
+	_isrInterrupt = false; // Mark interrupt as processed
 	return true;
 }
 
@@ -287,39 +279,12 @@ void FT6X36::fireEvent(TPoint point, TEvent e)
 
 void FT6X36::debugInfo()
 {
-	printf("TH_DIFF: %d ", read8(FT6X36_REG_FILTER_COEF));
-	/* 
-	Serial.print("CTRL: ");
-	Serial.println(readRegister8(FT6X36_REG_CTRL));
-	Serial.print("TIMEENTERMONITOR: ");
-	Serial.println(readRegister8(FT6X36_REG_TIME_ENTER_MONITOR));
-	Serial.print("PERIODACTIVE: ");
-	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_ACTIVE));
-	Serial.print("PERIODMONITOR: ");
-	Serial.println(readRegister8(FT6X36_REG_TOUCHRATE_MONITOR));
-	Serial.print("RADIAN_VALUE: ");
-	Serial.println(readRegister8(FT6X36_REG_RADIAN_VALUE));
-	Serial.print("OFFSET_LEFT_RIGHT: ");
-	Serial.println(readRegister8(FT6X36_REG_OFFSET_LEFT_RIGHT));
-	Serial.print("OFFSET_UP_DOWN: ");
-	Serial.println(readRegister8(FT6X36_REG_OFFSET_UP_DOWN));
-	Serial.print("DISTANCE_LEFT_RIGHT: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_LEFT_RIGHT));
-	Serial.print("DISTANCE_UP_DOWN: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_UP_DOWN));
-	Serial.print("DISTANCE_ZOOM: ");
-	Serial.println(readRegister8(FT6X36_REG_DISTANCE_ZOOM));
-	Serial.print("CIPHER: ");
-	Serial.println(readRegister8(FT6X36_REG_CHIPID));
-	Serial.print("G_MODE: ");
-	Serial.println(readRegister8(FT6X36_REG_INTERRUPT_MODE));
-	Serial.print("PWR_MODE: ");
-	Serial.println(readRegister8(FT6X36_REG_POWER_MODE));
-	Serial.print("FIRMID: ");
-	Serial.println(readRegister8(FT6X36_REG_FIRMWARE_VERSION));
-	Serial.print("FOCALTECH_ID: ");
-	Serial.println(readRegister8(FT6X36_REG_PANEL_ID));
-	Serial.print("STATE: ");
-	Serial.println(readRegister8(FT6X36_REG_STATE));  
-	*/
+	printf("            TH_DIFF: %d             CTRL: %d\n", read8(FT6X36_REG_FILTER_COEF), read8(FT6X36_REG_CTRL));
+	printf("   TIMEENTERMONITOR: %d     PERIODACTIVE: %d\n", read8(FT6X36_REG_TIME_ENTER_MONITOR), read8(FT6X36_REG_TOUCHRATE_ACTIVE));
+	printf("      PERIODMONITOR: %d     RADIAN_VALUE: %d\n", read8(FT6X36_REG_TOUCHRATE_MONITOR), read8(FT6X36_REG_RADIAN_VALUE));
+	printf("  OFFSET_LEFT_RIGHT: %d   OFFSET_UP_DOWN: %d\n", read8(FT6X36_REG_OFFSET_LEFT_RIGHT), read8(FT6X36_REG_OFFSET_UP_DOWN));
+	printf("DISTANCE_LEFT_RIGHT: %d DISTANCE_UP_DOWN: %d\n", read8(FT6X36_REG_DISTANCE_LEFT_RIGHT), read8(FT6X36_REG_DISTANCE_UP_DOWN));
+	printf("      DISTANCE_ZOOM: %d           CIPHER: %d\n", read8(FT6X36_REG_DISTANCE_ZOOM), read8(FT6X36_REG_CHIPID));
+	printf("             G_MODE: %d         PWR_MODE: %d\n", read8(FT6X36_REG_INTERRUPT_MODE), read8(FT6X36_REG_POWER_MODE));
+	printf("             FIRMID: %d     FOCALTECH_ID: %d     STATE: %d\n", read8(FT6X36_REG_FIRMWARE_VERSION), read8(FT6X36_REG_PANEL_ID), read8(FT6X36_REG_STATE));
 }

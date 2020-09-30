@@ -11,3 +11,19 @@ The [Adafruit_FT6206_Library](https://github.com/adafruit/Adafruit_FT6206_Librar
 
 The reading part of I2C was mostly stealed from [LVGL for ESP-IDF](https://github.com/lvgl/lv_port_esp32) but respecting the methods of the original library and done in a different way. Hats off to the great work of this library and FT6X36.
 A second intention derived from this fork, is to make this library be less processor intensive, getting out the loop and reading only touch per interruption. Only when the INT pin goes from high to low (Falling edge, known as GPIO_INTR_NEGEDGE in ESP-IDF Framework)
+
+[Video of the library working on ESP32 with GDEW027W3-T](https://twitter.com/martinfasani/status/1310294140329041921)
+
+[Example implemented on Cale-IDF our IDF component for epapers](https://github.com/martinberlin/cale-idf/wiki/Demo-catalog) in the cale-idf branch: feature/17-touch
+
+## Donations accepted
+
+
+If you like this component and it made your life easier please consider becoming a sponsor where you can donate as little as 2 u$ per month. Just click on:
+❤ Sponsor  on the top right
+
+♢ For cryptocurrency users is also possible to help this project transferring Ethereum:
+
+0x68cEAB84F33776a7Fac977B2Bdc0D50933344086
+
+We are thankful for the support and contributions so far!
