@@ -117,6 +117,8 @@ struct TPoint
 	}
 };
 
+
+
 class FT6X36
 {
 	static void IRAM_ATTR isr(void* arg);
@@ -124,14 +126,30 @@ public:
     // TwoWire * wire will be replaced by ESP-IDF https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/i2c.html
 	FT6X36(int8_t intPin);
 	~FT6X36();
-	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD);
+	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD, uint16_t width = 0, uint16_t height = 0);
 	void registerIsrHandler(void(*fn)());
 	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
 	uint8_t touched();
 	void loop();
 	void processTouch();
 	void debugInfo();
-
+	// Helper functions to make the touch display aware
+	void setRotation(uint8_t rotation);
+	void setTouchWidth(uint16_t width);
+	void setTouchHeight(uint16_t height);
+	// Pending implementation. How much x->touch y↓touch is placed (In case is smaller than display)
+	void setXoffset(uint16_t x_offset);
+	void setYoffset(uint16_t y_offset);
+	// Smart template from EPD to swap x,y:
+    template <typename T> static inline void
+    swap(T& a, T& b)
+    {
+      T t = a;
+      a = b;
+      b = t;
+    }
+	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
+	
 private:
 	void onInterrupt();
 	bool readData(void);
@@ -139,16 +157,19 @@ private:
 	uint8_t readRegister8(uint8_t reg, uint8_t *data_buf);
 	void fireEvent(TPoint point, TEvent e);
 	uint8_t read8(uint8_t regName);
-	
+
+	bool _isrInterrupt = false;
 	static FT6X36 * _instance;
 	
 	uint8_t _intPin;
 
 	void(*_isrHandler)() = nullptr;
-	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
-	volatile uint8_t _isrCounter = 0;
-	bool _isrInterrupt = false;
 	
+	// Make touch rotation aware:
+	uint8_t _rotation = 0;
+	uint16_t _touch_width = 0;
+	uint16_t _touch_height = 0;
+
 	uint8_t _touches;
 	uint16_t _touchX[2], _touchY[2], _touchEvent[2];
 	TPoint _points[10];

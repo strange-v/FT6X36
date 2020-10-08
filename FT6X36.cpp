@@ -35,14 +35,21 @@ FT6X36::~FT6X36()
 
 void IRAM_ATTR FT6X36::isr(void* arg)
 {
-     //Give the semaphore.
+    // Give the semaphore.
     BaseType_t mustYield=false;
     xSemaphoreGiveFromISR(TouchSemaphore, &mustYield);
     if (mustYield) portYIELD_FROM_ISR();
+	_instance->onInterrupt();
 }
 
-bool FT6X36::begin(uint8_t threshold)
+bool FT6X36::begin(uint8_t threshold, uint16_t width, uint16_t height)
 {
+	_touch_width = width;
+	_touch_height = height;
+	if (width == 0 || height ==0) {
+		ESP_LOGE(TAG,"begin(uint8_t threshold, uint16_t width, uint16_t height) did not receive the width / height so touch cannot be rotation aware");
+	}
+
 	uint8_t data_panel_id;
 	readRegister8(FT6X36_REG_PANEL_ID, &data_panel_id);
 
@@ -112,48 +119,40 @@ void FT6X36::loop()
 
 void FT6X36::processTouch()
 {
+	// Wait until ISR interruption is ready to read touch
+	xSemaphoreTake(TouchSemaphore, portMAX_DELAY);
+	if (!_isrInterrupt) return;
+
 	readData();
+	if (_isrInterrupt) {
 	uint8_t n = 0;
 	TRawEvent event = (TRawEvent)_touchEvent[n];
 	TPoint point{_touchX[n], _touchY[n]};
 
-	//printf("pt:%d ",_touchEvent[n]);
-
-	if (event == TRawEvent::PressDown || event == TRawEvent::Contact)
+	//printf("pt:%d c:%d ",_touchEvent[n], _isrCounter);
+	
+	// Only TAP detected for now
+	if (event == TRawEvent::Contact)
 	{
 		_points[0] = point;
 		_pointIdx = 1;
-		_dragMode = false;
-		_touchStartTime = esp_timer_get_time()/1000;
-		fireEvent(point, TEvent::TouchStart);
+		fireEvent(point, TEvent::Tap);
 	}
-	else if (event == TRawEvent::LiftUp)
+	if (event == TRawEvent::LiftUp)
 	{
-		_points[9] = point;
-		_touchEndTime = esp_timer_get_time()/1000;
 		fireEvent(point, TEvent::TouchEnd);
-		if (_dragMode)
-		{
-			fireEvent(point, TEvent::DragEnd);
-			_dragMode = false;
-		}
-		if (_points[0].aboutEqual(point) && _touchEndTime - _touchStartTime <= 300)
-		{
-			fireEvent(point, TEvent::Tap);
-			_points[0] = {0, 0};
-			_touchStartTime = 0;
-		}
+
+	}
+	_isrInterrupt=false;
 	}
 }
 
 void FT6X36::onInterrupt()
 {
-	_isrInterrupt = true;
-	
-	if (_isrHandler)
-	{
-		_isrHandler();
-	}
+	_isrInterrupt=true;
+	//if (_isrHandler) {
+	//	_isrHandler();
+	//}
 }
 
 uint8_t FT6X36::read8(uint8_t regName) {
@@ -164,9 +163,6 @@ uint8_t FT6X36::read8(uint8_t regName) {
 
 bool FT6X36::readData(void)
 {
-	// Wait until ISR interruption is ready to read touch
-	xSemaphoreTake(TouchSemaphore, portMAX_DELAY);
-
 	uint8_t data_xy[4];         // 2 bytes X | 2 bytes Y
     uint8_t touch_pnt_cnt;      // Number of detected touch points
 
@@ -214,12 +210,32 @@ bool FT6X36::readData(void)
         return false;
     }
 
-    _touchX[0] = ((data_xy[0] & FT6X36_MSB_MASK) << 8) | (data_xy[1] & FT6X36_LSB_MASK);
-    _touchY[0] = ((data_xy[2] & FT6X36_MSB_MASK) << 8) | (data_xy[3] & FT6X36_LSB_MASK);
-	_touchEvent[0] = data_xy[0] >> 7;
+    uint16_t x = ((data_xy[0] & FT6X36_MSB_MASK) << 8) | (data_xy[1] & FT6X36_LSB_MASK);
+    uint16_t y = ((data_xy[2] & FT6X36_MSB_MASK) << 8) | (data_xy[3] & FT6X36_LSB_MASK);
+	// This is not right. Is not getting the 0x03   [7:6] 1st event flag
+	_touchEvent[0] = data_xy[0] >> 6;
+	
+	// Make _touchX[0] and _touchY[0] rotation aware
+	  switch (_rotation)
+  {
+	case 1:
+	    swap(x, y);
+		y = _touch_width - y -1;
+		break;
+	case 2:
+		x = _touch_width - x - 1;
+		y = _touch_height - y - 1;
+		break;
+	case 3:
+		swap(x, y);
+		x = _touch_height - x - 1;
+		break;
+  }
+	_touchX[0] = x;
+	_touchY[0] = y;
 	
 	if (CONFIG_FT6X36_DEBUG)
-	ets_printf("X: %d Y: %d T: %d\n", _touchX[0], _touchY[0], _touchEvent[0]);
+	  printf("X:%d Y:%d T:%d\n", _touchX[0], _touchY[0], _touchEvent[0]);
 	
 	return true;
 }
@@ -276,4 +292,18 @@ void FT6X36::debugInfo()
 	printf("      DISTANCE_ZOOM: %d           CIPHER: %d\n", read8(FT6X36_REG_DISTANCE_ZOOM), read8(FT6X36_REG_CHIPID));
 	printf("             G_MODE: %d         PWR_MODE: %d\n", read8(FT6X36_REG_INTERRUPT_MODE), read8(FT6X36_REG_POWER_MODE));
 	printf("             FIRMID: %d     FOCALTECH_ID: %d     STATE: %d\n", read8(FT6X36_REG_FIRMWARE_VERSION), read8(FT6X36_REG_PANEL_ID), read8(FT6X36_REG_STATE));
+}
+
+void FT6X36::setRotation(uint8_t rotation) {
+	_rotation = rotation;
+}
+
+void FT6X36::setTouchWidth(uint16_t width) {
+	printf("touch w:%d\n",width);
+	_touch_width = width;
+}
+
+void FT6X36::setTouchHeight(uint16_t height) {
+	printf("touch h:%d\n",height);
+	_touch_height = height;
 }
