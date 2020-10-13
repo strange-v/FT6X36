@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FT6X36_h
+#define FT6X36_h
 #include <Arduino.h>
 #include <Wire.h>
 
@@ -131,4 +132,4 @@ private:
 	unsigned long _touchEndTime = 0;
 	bool _dragMode = false;
 };
-
+#endif
