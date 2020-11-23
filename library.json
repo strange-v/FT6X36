@@ -1,0 +1,14 @@
+"name": "FT6X36",
+"version": "1.0.2",
+"description": "Arduino library for FT6X36 based touch screens. This library provides an easy way to work with FT6X36 based touch screens.",
+"repository":
+{
+    "type": "git",
+    "url": "https://github.com/strange-v/FT6X36"
+},
+"authors":
+{
+    "name": "strange_v"
+},
+"license": "MIT License",
+"frameworks": "arduino"
