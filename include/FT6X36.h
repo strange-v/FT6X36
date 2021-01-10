@@ -109,11 +109,12 @@ struct TPoint
 {
 	uint16_t x;
 	uint16_t y;
-
+	/**
+	 * This is being used in the original library but I'm not using it in this implementation
+	 */
 	bool aboutEqual(const TPoint point)
 	{
-		const uint8_t maxDeviation = 5;
-		return abs(x - point.x) <= maxDeviation && abs(y - point.y) <= maxDeviation;
+		return abs(x - point.x) <= 5 && abs(y - point.y) <= 5;
 	}
 };
 
@@ -127,7 +128,6 @@ public:
 	FT6X36(int8_t intPin);
 	~FT6X36();
 	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD, uint16_t width = 0, uint16_t height = 0);
-	void registerIsrHandler(void(*fn)());
 	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
 	uint8_t touched();
 	void loop();
@@ -151,19 +151,14 @@ public:
 	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
 	
 private:
-	void onInterrupt();
 	bool readData(void);
 	void writeRegister8(uint8_t reg, uint8_t val);
 	uint8_t readRegister8(uint8_t reg, uint8_t *data_buf);
 	void fireEvent(TPoint point, TEvent e);
 	uint8_t read8(uint8_t regName);
-
-	bool _isrInterrupt = false;
 	static FT6X36 * _instance;
 	
 	uint8_t _intPin;
-
-	void(*_isrHandler)() = nullptr;
 	
 	// Make touch rotation aware:
 	uint8_t _rotation = 0;
@@ -176,7 +171,11 @@ private:
 	uint8_t _pointIdx = 0;
 	unsigned long _touchStartTime = 0;
 	unsigned long _touchEndTime = 0;
+    uint8_t lastEvent = 3; // No event
+	uint16_t lastX = 0;
+	uint16_t lastY = 0;
 	bool _dragMode = false;
+	const uint8_t maxDeviation = 5;
 };
 
 #endif
