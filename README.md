@@ -8,6 +8,19 @@ This will work only as a compoment in the ESP-IDF framework. If you are looking 
 ## Annotation
 The [Adafruit_FT6206_Library](https://github.com/adafruit/Adafruit_FT6206_Library) was used as a base for the FT6X36 library. Many things were added/improved/rewritten based on a datasheet for the controller.
 
+
+## Fork policy
+
+**Please do not Fork this repository to bookmark it**. For that use the ★ Star button. Acceptable forks fall in this three categories:
+
+1. You found a bug and want to suggest a merge request. Then Fork it!
+2. You will contribute adding a new epaper model that does exist.
+3. You will use FT6X36-IDF as a base to create something new. But in that case it would be nice to let us know first or to refer to the original repository from strange-v.
+
+All other users that fork this without falling in this categories and without any kind of advice to us will be blocked and will not be able to interact with the further releases. Forking is not bookmarking!
+
+We don't like having copies of this without any reason. It is just a bad practice, makes things confusing, and makes absolutely no sense. 
+
 ## References
 
 The reading part of I2C was mostly stealed from [LVGL for ESP-IDF](https://github.com/lvgl/lv_port_esp32) but respecting the methods of the original library and done in a different way. Hats off to the great work of this library and FT6X36.
