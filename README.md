@@ -30,7 +30,7 @@ A second intention derived from this fork, is to make this library be less proce
 
 [Video of next step: To integrate this on an epaper component](https://twitter.com/martinfasani/status/1312877893001895943?s=21) and make it rotation and display aware.
 
-[Example implemented on Cale-IDF our IDF component for epapers](https://github.com/martinberlin/cale-idf/wiki/Demo-catalog) in the cale-idf branch: feature/17-touch
+[Example implemented on Cale-IDF our IDF component for epapers](https://github.com/martinberlin/cale-idf/wiki/Demo-catalog)
 
 ## Donations accepted
 
