@@ -233,8 +233,9 @@ void L58Touch::writeData(uint8_t *data, int len)
     if (len==0) return; 
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
-	i2c_master_write(cmd, data, len, ACK_CHECK_EN);
-	i2c_master_stop(cmd);
+    i2c_master_write(cmd, data, len, ACK_CHECK_EN);
+    i2c_master_stop(cmd);
+    i2c_cmd_link_delete(cmd);
 }
 
 uint8_t L58Touch::readRegister8(uint8_t reg, uint8_t *data_buf)
