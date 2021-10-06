@@ -1,7 +1,7 @@
 #include "FT6X36.h"
 
 FT6X36 *FT6X36::_instance = nullptr;
-static const char *TAG = "i2c-touch";
+static const char *touchTag = "i2c-touch";
 
 //Handle indicating I2C is ready to read the touch
 SemaphoreHandle_t TouchSemaphore = xSemaphoreCreateBinary();
@@ -38,25 +38,25 @@ bool FT6X36::begin(uint8_t threshold, uint16_t width, uint16_t height)
 	_touch_width = width;
 	_touch_height = height;
 	if (width == 0 || height ==0) {
-		ESP_LOGE(TAG,"begin(uint8_t threshold, uint16_t width, uint16_t height) did not receive the width / height so touch cannot be rotation aware");
+		ESP_LOGE(touchTag,"begin(uint8_t threshold, uint16_t width, uint16_t height) did not receive the width / height so touch cannot be rotation aware");
 	}
 
 	uint8_t data_panel_id;
 	readRegister8(FT6X36_REG_PANEL_ID, &data_panel_id);
 
 	if (data_panel_id != FT6X36_VENDID) {
-		ESP_LOGE(TAG,"FT6X36_VENDID does not match. Received:0x%x Expected:0x%x\n",data_panel_id,FT6X36_VENDID);
+		ESP_LOGE(touchTag,"FT6X36_VENDID does not match. Received:0x%x Expected:0x%x\n",data_panel_id,FT6X36_VENDID);
 		return false;
 		}
-		ESP_LOGI(TAG, "\tDevice ID: 0x%02x", data_panel_id);
+		ESP_LOGI(touchTag, "\tDevice ID: 0x%02x", data_panel_id);
 
 	uint8_t chip_id;
 	readRegister8(FT6X36_REG_CHIPID, &chip_id);
 	if (chip_id != FT6206_CHIPID && chip_id != FT6236_CHIPID && chip_id != FT6336_CHIPID) {
-		ESP_LOGE(TAG,"FT6206_CHIPID does not match. Received:0x%x\n",chip_id);
+		ESP_LOGE(touchTag,"FT6206_CHIPID does not match. Received:0x%x\n",chip_id);
 		return false;
 	}
-	ESP_LOGI(TAG, "\tFound touch controller with Chip ID: 0x%02x", chip_id);
+	ESP_LOGI(touchTag, "\tFound touch controller with Chip ID: 0x%02x", chip_id);
 	
     // INT pin triggers the callback function on the Falling edge of the GPIO
     gpio_config_t io_conf;
@@ -88,7 +88,7 @@ uint8_t FT6X36::touched()
 	uint8_t data_buf;
     esp_err_t ret = readRegister8(FT6X36_REG_NUM_TOUCHES, &data_buf);
 	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Error reading from device: %s", esp_err_to_name(ret));
+		ESP_LOGE(touchTag, "Error reading from device: %s", esp_err_to_name(ret));
 	 }
 
 	if (data_buf > 2)

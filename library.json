@@ -1,0 +1,13 @@
+{
+  "name": "FT6X36",
+  "description": "ESP-IDF library for FT6X36 and L58 based touch screens",
+  "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/martinberlin/FT6X36-IDF"
+  },
+  "build": {
+    "includeDir": "include",
+    "srcDir": "."
+  }
+}

@@ -4,7 +4,7 @@
 #include "L58Touch.h"
 
 L58Touch *L58Touch::_instance = nullptr;
-static const char *TAG = "i2c-touch";
+static const char *touchTag = "i2c-touch";
 
 //Handle indicating I2C is ready to read the touch
 SemaphoreHandle_t TouchSemaphore = xSemaphoreCreateBinary();
@@ -47,7 +47,7 @@ bool L58Touch::begin(uint16_t width, uint16_t height)
 	_touch_width = width;
 	_touch_height = height;
 	if (width == 0 || height ==0) {
-		ESP_LOGE(TAG,"begin(uint8_t threshold, uint16_t width, uint16_t height) did not receive the width / height so touch cannot be rotation aware");
+		ESP_LOGE(touchTag,"begin(uint8_t threshold, uint16_t width, uint16_t height) did not receive the width / height so touch cannot be rotation aware");
 	}
 
     // INT pin triggers the callback function on the Falling edge of the GPIO
@@ -287,9 +287,9 @@ void L58Touch::readBytes(uint8_t *data, int len) {
         }
     } else if (ret == ESP_ERR_TIMEOUT) {
 		// Getting a lot of this!
-        //ESP_LOGW(TAG, "Bus is busy");
+        //ESP_LOGW(touchTag, "Bus is busy");
     } else {
-        ESP_LOGW(TAG, "Read failed");
+        ESP_LOGW(touchTag, "Read failed");
     }
 }
 
