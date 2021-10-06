@@ -164,7 +164,9 @@ TPoint L58Touch::scanPoint()
             data[i].y = (uint16_t)((buffer[i * 5 + 1 + offset] << 4) | ((buffer[i * 5 + 3 + offset] >> 4) & 0x0F));
             data[i].x = (uint16_t)((buffer[i * 5 + 2 + offset] << 4) | (buffer[i * 5 + 3 + offset] & 0x0F));
 
-            printf("X[%d]:%d Y:%d E:%d\n", i, data[i].x, data[i].y, data[i].event);
+            #if defined(CONFIG_FT6X36_DEBUG) && CONFIG_FT6X36_DEBUG==1
+              printf("X[%d]:%d Y:%d E:%d\n", i, data[i].x, data[i].y, data[i].event);
+            #endif
         }
 
     } else {
@@ -180,7 +182,10 @@ TPoint L58Touch::scanPoint()
         if (data[0].event == 0) { /** Lift up */
             _touchEndTime = esp_timer_get_time()/1000;
         }
-        printf("X:%d Y:%d E:%d\n", data[0].x, data[0].y, data[0].event);
+
+        #if defined(CONFIG_FT6X36_DEBUG) && CONFIG_FT6X36_DEBUG==1
+          printf("X:%d Y:%d E:%d\n", data[0].x, data[0].y, data[0].event);
+        #endif
 	}
      
 	uint16_t x = data[0].x;
