@@ -95,7 +95,7 @@ void L58Touch::processTouch()
     if (!tapDetectionEnabled) {
         fireEvent(point, TEvent::Tap);
     }
-    if (tapDetectionEnabled && _touchEndTime - _touchStartTime <= 150) {
+    if (tapDetectionEnabled && _touchEndTime - _touchStartTime <= _tap_threshold) {
         fireEvent(point, TEvent::Tap);
     }
 }
@@ -316,6 +316,14 @@ void L58Touch::setTouchWidth(uint16_t width) {
 void L58Touch::setTouchHeight(uint16_t height) {
 	printf("touch h:%d\n",height);
 	_touch_height = height;
+}
+
+void L58Touch::setTapThreshold(uint8_t millis) {
+    _tap_threshold = millis;
+}
+
+uint8_t L58Touch::getTapThreshold() {
+    return _tap_threshold;
 }
 
 void L58Touch::clearFlags() {

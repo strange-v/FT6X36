@@ -67,9 +67,11 @@ public:
 	void setRotation(uint8_t rotation);
 	void setTouchWidth(uint16_t width);
 	void setTouchHeight(uint16_t height);
+	void setTapThreshold(uint8_t millis);
 	// Pending implementation. How much x->touch y↓touch is placed (In case is smaller than display)
 	void setXoffset(uint16_t x_offset);
 	void setYoffset(uint16_t y_offset);
+	uint8_t getTapThreshold();
 	void sleep();
 	// Smart template from EPD to swap x,y:
     template <typename T> static inline void
@@ -95,7 +97,9 @@ private:
 
 	static L58Touch * _instance;
 	uint8_t _intPin;
-	
+	// Milliseconds between press and release for Tap detection
+	uint8_t _tap_threshold = 150;
+
 	// Make touch rotation aware:
 	uint8_t _rotation = 0;
 	uint16_t _touch_width = 0;
