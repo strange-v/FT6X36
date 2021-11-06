@@ -69,9 +69,9 @@ bool L58Touch::begin(uint16_t width, uint16_t height)
 	return true;
 }
 
-void L58Touch::registerTouchHandler(void (*fn)(TPoint point, TEvent e))
+void L58Touch::registerTouchHandler(L58TouchHandlerCallback touch_handler)
 {
-	_touchHandler = fn;
+    _touchHandler = touch_handler;
 	if (CONFIG_FT6X36_DEBUG) printf("Touch handler function registered\n");
 }
 

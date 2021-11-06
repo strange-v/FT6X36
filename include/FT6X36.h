@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <stdio.h>
+#include <functional>
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "sdkconfig.h"
@@ -118,7 +119,7 @@ struct TPoint
 	}
 };
 
-
+typedef std::function<void(TPoint point, TEvent e)> FT6X36TouchHandlerCallback;
 
 class FT6X36
 {
@@ -128,7 +129,7 @@ public:
 	FT6X36(int8_t intPin);
 	~FT6X36();
 	bool begin(uint8_t threshold = FT6X36_DEFAULT_THRESHOLD, uint16_t width = 0, uint16_t height = 0);
-	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
+	void registerTouchHandler(FT6X36TouchHandlerCallback touch_handler);
 	uint8_t touched();
 	void loop();
 	void processTouch();
@@ -148,7 +149,7 @@ public:
       a = b;
       b = t;
     }
-	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
+	FT6X36TouchHandlerCallback _touchHandler = nullptr;
 	
 private:
 	bool readData(void);

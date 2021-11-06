@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include <stdio.h>
+#include <functional>
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "sdkconfig.h"
@@ -44,6 +45,8 @@ struct TPoint
 	uint8_t event;
 };
 
+typedef std::function<void(TPoint point, TEvent e)> L58TouchHandlerCallback;
+
 class L58Touch
 {
 	static void IRAM_ATTR isr(void* arg);
@@ -59,7 +62,7 @@ public:
 	L58Touch(int8_t intPin);
 	~L58Touch();
 	bool begin(uint16_t width = 0, uint16_t height = 0);
-	void registerTouchHandler(void(*fn)(TPoint point, TEvent e));
+	void registerTouchHandler(L58TouchHandlerCallback touch_handler);
 	uint8_t touched();
 	void loop();
 	void processTouch();
@@ -81,7 +84,7 @@ public:
       a = b;
       b = t;
     }
-	void(*_touchHandler)(TPoint point, TEvent e) = nullptr;
+	L58TouchHandlerCallback _touchHandler = nullptr;
 	TouchData_t data[5];
 	bool tapDetectionEnabled = true;
 	
